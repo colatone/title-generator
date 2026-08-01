@@ -37,6 +37,7 @@
     padding:16px 18px;margin:14px 0;}
   .ttl{font-size:17px;font-weight:700;line-height:1.5;margin:0 0 4px;}
   .meta{font-size:12px;color:var(--sub);margin-bottom:10px;}
+  .dup{color:#bbb;margin-left:6px;}
   .pill{display:inline-block;background:#eef3ff;color:var(--accent);border-radius:6px;
     padding:1px 8px;margin-right:6px;}
   .body p{margin:9px 0;font-size:14px;text-align:justify;}
@@ -190,6 +191,7 @@ const out = document.getElementById('out');
 const countEl = document.getElementById('count');
 const toast = document.getElementById('toast');
 let last = [];
+let copyCount = {};
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function renderBody(str){
@@ -197,8 +199,16 @@ function renderBody(str){
 }
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
+function weightedSample(arr, weights, n){
+  if(!arr.length || n<=0) return [];
+  const scored = arr.map((item,i)=>({item, s: Math.random()*weights[i]}));
+  scored.sort((a,b)=>b.s-a.s);
+  return scored.slice(0,n).map(x=>x.item);
+}
+
 function gen(){
   const custom = document.getElementById('custom').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const keyOf = (c)=> c.title + "|||" + c.body;
 
   const builtin = [];
   for(const t of TOPICS)
@@ -217,13 +227,18 @@ function gen(){
             customCombos.push({title:w(c,h), body:t.body, cat:t.cat});
   }
 
-  shuffle(customCombos);
-  shuffle(builtin);
-  const combos = customCombos.concat(builtin);
+  const totalAll = customCombos.length + builtin.length;
+  let n = parseInt(document.getElementById('num').value,10) || 3;
+  n = Math.min(Math.max(n,1), Math.min(totalAll,60));
+
+  const wCustom = customCombos.map(c=>1/(1+(copyCount[keyOf(c)]||0)*3));
+  const wBuiltin = builtin.map(c=>1/(1+(copyCount[keyOf(c)]||0)*3));
+  const pickedCustom = customCombos.length ? weightedSample(customCombos, wCustom, Math.min(n, customCombos.length)) : [];
+  const remain = Math.max(0, n - pickedCustom.length);
+  const pickedBuiltin = weightedSample(builtin, wBuiltin, remain);
+  const combos = pickedCustom.concat(pickedBuiltin);
   const total = combos.length;
 
-  let n = parseInt(document.getElementById('num').value,10) || 3;
-  n = Math.min(Math.max(n,1), Math.min(total,60));
   last = combos.slice(0,n);
 
   const titleOnly = document.getElementById('titleOnly').checked;
@@ -231,7 +246,9 @@ function gen(){
   last.forEach((it,i)=>{
     const art = document.createElement('div');
     art.className = 'art';
-    let html = `<div class="ttl">${esc(it.title)}</div><div class="meta"><span class="pill">${esc(it.cat)}</span>第 ${i+1} 篇</div>`;
+    const kc = copyCount[it.title + "|||" + it.body] || 0;
+    const dupNote = kc>0 ? ` <span class="dup">已复制${kc}次</span>` : '';
+    let html = `<div class="ttl">${esc(it.title)}</div><div class="meta"><span class="pill">${esc(it.cat)}</span>第 ${i+1} 篇${dupNote}</div>`;
     if(!titleOnly) html += renderBody(it.body);
     html += `<div class="btrow">
       <button class="ghost copyone" data-i="${i}">复制此篇</button>
@@ -246,8 +263,10 @@ function gen(){
     b.addEventListener('click',()=>{
       if(b.disabled) return;
       const it = last[+b.dataset.i];
+      const k = it.title + "|||" + it.body;
+      copyCount[k] = (copyCount[k] || 0) + 1;
       copyText(it.title + '\n\n' + it.body);
-      showToast('已复制第 '+(+b.dataset.i+1)+' 篇');
+      showToast('已复制第 '+(+b.dataset.i+1)+' 篇（累计'+copyCount[k]+'次）');
       b.disabled = true; b.classList.add('copied');
     });
   });
@@ -299,7 +318,7 @@ document.getElementById('copyAll').addEventListener('click', ()=>{
   const btns = out.querySelectorAll('.copyone:not([disabled])');
   if(!btns.length){showToast('已全部复制');return;}
   const parts = [];
-  btns.forEach(b=>{ const it = last[+b.dataset.i]; parts.push(it.title + '\n\n' + it.body); b.disabled = true; b.classList.add('copied'); });
+  btns.forEach(b=>{ const it = last[+b.dataset.i]; const k = it.title + "|||" + it.body; copyCount[k] = (copyCount[k]||0)+1; parts.push(it.title + '\n\n' + it.body); b.disabled = true; b.classList.add('copied'); });
   copyText(parts.join('\n\n——————\n\n'));
   showToast(`已复制 ${btns.length} 篇`);
 });
