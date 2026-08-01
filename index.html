@@ -48,6 +48,9 @@
     opacity:0;transition:.25s;pointer-events:none;}
   .toast.show{opacity:1;}
   .hint{font-size:12px;color:var(--sub);margin-top:6px;}
+  .catfilter{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-start;}
+  .catfilter .grp{width:100%;font-size:12px;color:var(--sub);margin:2px 0 4px;font-weight:600;}
+  .catfilter label{font-size:13px;color:var(--text);display:flex;align-items:center;gap:5px;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -72,6 +75,16 @@
     <label class="s">自定义选题钩子（每行一条，留空则用内置 8 类；自定义项用通用正文模板）：</label>
     <textarea id="custom" placeholder="例：&#10;一个人在出租屋的第365天&#10;和前任彻底断开联系的那个晚上&#10;35岁裸辞后第一次睡到自然醒"></textarea>
     <div class="hint">提示：内置 16 类成稿（每篇 300+ 字、无编号、可直接粘贴公众号）——情感 8 类：婚姻日常/母职自我/情绪压抑/独处/亲情/中年压力/友情/生活小确幸；高变现 8 类：搞钱副业/护肤美妆/健康养生/母婴育儿/家居好物/穿搭形象/自我成长/美食生活。自定义项会套通用模板，建议点对应卡片的「AI 扩写提示」复制 prompt 去 AI 精修。</div>
+  </div>
+
+  <div class="cardbox">
+    <h2>赛道筛选</h2>
+    <div class="row" style="margin-bottom:10px;">
+      <button class="ghost" id="selAll">全选</button>
+      <button class="ghost" id="selEmo">仅情感</button>
+      <button class="ghost" id="selMoney">仅高变现</button>
+    </div>
+    <div id="catFilter" class="catfilter"></div>
   </div>
 
   <div id="out"></div>
@@ -175,12 +188,13 @@ function gen(){
   const custom = document.getElementById('custom').value.split('\n').map(s=>s.trim()).filter(Boolean);
   const keyOf = (c)=> c.title + "|||" + c.body;
 
+  const activeCats = new Set([...document.querySelectorAll('.catcb:checked')].map(cb=>cb.dataset.cat));
   const builtin = [];
   for(const t of TOPICS)
     for(const h of t.hooks)
       for(const c of CALLINGS)
         for(const w of WRAPS)
-          builtin.push({title:w(c,h), body:t.body, cat:t.cat});
+          if(activeCats.has(t.cat)) builtin.push({title:w(c,h), body:t.body, cat:t.cat});
 
   let customCombos = [];
   if(custom.length){
@@ -204,6 +218,12 @@ function gen(){
   const combos = pickedCustom.concat(pickedBuiltin);
 
   last = combos.slice(0,n);
+
+  if(last.length===0){
+    out.innerHTML = '<div class="cardbox" style="color:var(--sub);">没有可生成的内容：请至少勾选一个赛道，或在「自定义选题钩子」里填写。</div>';
+    countEl.textContent = '已生成 0 篇';
+    return;
+  }
 
   const titleOnly = document.getElementById('titleOnly').checked;
   out.innerHTML = '';
@@ -296,6 +316,28 @@ document.getElementById('copyAll').addEventListener('click', ()=>{
   showToast(`已复制 ${btns.length} 篇`);
 });
 document.getElementById('titleOnly').addEventListener('change', gen);
+
+// 赛道筛选
+const MONEY_CATS = ["搞钱副业","护肤美妆","健康养生","母婴育儿","家居好物","穿搭形象","自我成长","美食生活"];
+const EMO_CATS = TOPICS.map(t=>t.cat).filter(c=>!MONEY_CATS.includes(c));
+function buildCatFilter(){
+  const box = document.getElementById('catFilter');
+  box.innerHTML = '';
+  for(const [gname, cats] of [["情感类", EMO_CATS], ["高变现类", MONEY_CATS]]){
+    const gh = document.createElement('div'); gh.className='grp'; gh.textContent=gname; box.appendChild(gh);
+    for(const cat of cats){
+      const lab = document.createElement('label');
+      const cb = document.createElement('input'); cb.type='checkbox'; cb.className='catcb'; cb.dataset.cat=cat; cb.checked=true;
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(cat));
+      box.appendChild(lab);
+    }
+  }
+}
+buildCatFilter();
+document.getElementById('catFilter').addEventListener('change', gen);
+document.getElementById('selAll').addEventListener('click', ()=>{ document.querySelectorAll('.catcb').forEach(cb=>cb.checked=true); gen(); });
+document.getElementById('selEmo').addEventListener('click', ()=>{ document.querySelectorAll('.catcb').forEach(cb=>cb.checked = EMO_CATS.includes(cb.dataset.cat)); gen(); });
+document.getElementById('selMoney').addEventListener('click', ()=>{ document.querySelectorAll('.catcb').forEach(cb=>cb.checked = MONEY_CATS.includes(cb.dataset.cat)); gen(); });
 
 gen();
 </script>
