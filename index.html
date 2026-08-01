@@ -43,7 +43,6 @@
   .body p{margin:9px 0;font-size:14px;text-align:justify;}
   .btrow{display:flex;gap:8px;margin-top:12px;}
   .copyone,.aiBtn{font-size:12px;padding:6px 12px;}
-  .copyone.copied{background:#f0f0f0;color:#bbb;border-color:#e5e7eb;cursor:default;}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
     background:#1f2329;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;
     opacity:0;transition:.25s;pointer-events:none;}
@@ -246,11 +245,12 @@ function gen(){
     const art = document.createElement('div');
     art.className = 'art';
     const kc = copyCount[it.title + "|||" + it.body] || 0;
-    const dupNote = kc>0 ? ` <span class="dup">已复制${kc}次</span>` : '';
-    let html = `<div class="ttl">${esc(it.title)}</div><div class="meta"><span class="pill">${esc(it.cat)}</span>第 ${i+1} 篇${dupNote}</div>`;
+    const copyLabel = kc>0 ? `已复制 ${kc} 次` : '复制此篇';
+    const dupHtml = ` <span class="dup" id="dup-${i}">${kc>0 ? '已复制'+kc+'次' : ''}</span>`;
+    let html = `<div class="ttl">${esc(it.title)}</div><div class="meta"><span class="pill">${esc(it.cat)}</span>第 ${i+1} 篇${dupHtml}</div>`;
     if(!titleOnly) html += renderBody(it.body);
     html += `<div class="btrow">
-      <button class="ghost copyone" data-i="${i}">复制此篇</button>
+      <button class="ghost copyone" data-i="${i}">${copyLabel}</button>
       <button class="ghost aiBtn" data-i="${i}">AI 扩写提示</button>
     </div>`;
     art.innerHTML = html;
@@ -260,14 +260,15 @@ function gen(){
   countEl.textContent = `已生成 ${last.length} 篇（候选池 ${combos.length}）`;
   out.querySelectorAll('.copyone').forEach(b=>{
     b.addEventListener('click',()=>{
-      if(b.disabled) return;
       const it = last[+b.dataset.i];
       const k = it.title + "|||" + it.body;
       copyCount[k] = (copyCount[k] || 0) + 1;
       try { localStorage.setItem('tcopy_copycount', JSON.stringify(copyCount)); } catch(e) {}
       copyText(it.title + '\n\n' + it.body);
+      b.textContent = '已复制 ' + copyCount[k] + ' 次';
+      const dup = document.getElementById('dup-'+b.dataset.i);
+      if(dup) dup.textContent = '已复制'+copyCount[k]+'次';
       showToast('已复制第 '+(+b.dataset.i+1)+' 篇（累计'+copyCount[k]+'次）');
-      b.disabled = true; b.classList.add('copied');
     });
   });
   out.querySelectorAll('.aiBtn').forEach(b=>{
@@ -282,9 +283,9 @@ function gen(){
 function buildPrompt(it){
   const isCustom = it.cat === "自定义";
   const task = isCustom
-    ? "请将下面这份按选题类型套好叙事框架的草稿，扩写成一篇完整、出彩、可直接发布的文案（补充具体画面与真实细节，使内容紧扣选题）。"
-    : "下面是一篇已有稿件，请换一个切入点重写一版同题文案，保持同等质量。";
-  const refLabel = isCustom ? "【现有草稿（已按选题套用叙事框架，待扩写）】" : "【现有参考稿（请换切入点重写）】";
+    ? "下面是一份已按选题套好叙事框架的草稿。请严格按草稿的骨架（见下）扩写成一篇完整、出彩、可直接发布的文案，补足具体画面与真实细节，不要偏离框架另写。"
+    : "下面是一篇已有稿件。请严格按它的骨架与叙事走向做润色/扩写（补足更具体的画面细节、更自然的表达），保持同等质量，不要另起结构、也不要换切入点重写。";
+  const refLabel = isCustom ? "【现有草稿（已套叙事框架，待按骨架扩写）】" : "【现有稿件（请按同一骨架润色，勿改结构）】";
   return `你是公众号情感/生活号写作助手。${task}
 
 【标题】${it.title}
@@ -292,13 +293,18 @@ function buildPrompt(it){
 ${refLabel}
 ${it.body}
 
+【必须遵守的文案骨架】（严格按顺序产出，不要另起炉灶、不要打乱段落）
+1. 开头：以"亲爱的/宝子"等亲昵称呼起笔，接选题钩子，1–2 句点题。
+2. 场景叙事：用 1–2 个具体、可感的真实生活画面展开，有细节、有温度，不空泛说教。
+3. 共情转折：点出读者共同的情绪或处境，把感受说透。
+4. 结尾：用一句真诚的提问引导评论互动（不引战、不骗赞）。
+
 要求：
 1. 保留原标题（或微调得更自然）。
-2. 改写为流畅的场景化叙事，不要用 123 编号、不要列点。
-3. 不少于 300 字，加入具体画面细节与真实情绪，避免空泛说教。
-4. 结尾用真诚的提问引导评论互动（不引战、不骗赞）。
-5. 语气亲切克制，符合"亲爱的/宝子"开头的情感号风格。
-6. 不虚构资质、不承诺无法兑现的效果、不引导加微信。
+2. 严格保留上面 4 段骨架与叙事走向，只在表达上润色、补细节、让文字更出彩；不要改变结构、不要改用 123 编号、不要列点。
+3. 不少于 300 字，加入具体画面细节与真实情绪。
+4. 语气亲切克制，符合"亲爱的/宝子"开头的情感号风格。
+5. 不虚构资质、不承诺无法兑现的效果、不引导加微信。
 
 请直接输出完整文案（标题 + 正文），不要多余解释。`;
 }
@@ -315,10 +321,10 @@ function showToast(m){toast.textContent=m;toast.classList.add('show');setTimeout
 document.getElementById('genBtn').addEventListener('click', gen);
 document.getElementById('copyAll').addEventListener('click', ()=>{
   if(!last.length){showToast('先生成再复制');return;}
-  const btns = out.querySelectorAll('.copyone:not([disabled])');
-  if(!btns.length){showToast('已全部复制');return;}
+  const btns = out.querySelectorAll('.copyone');
+  if(!btns.length){showToast('没有可复制的篇');return;}
   const parts = [];
-  btns.forEach(b=>{ const it = last[+b.dataset.i]; const k = it.title + "|||" + it.body; copyCount[k] = (copyCount[k]||0)+1; parts.push(it.title + '\n\n' + it.body); b.disabled = true; b.classList.add('copied'); });
+  btns.forEach(b=>{ const it = last[+b.dataset.i]; const k = it.title + "|||" + it.body; copyCount[k] = (copyCount[k]||0)+1; parts.push(it.title + '\n\n' + it.body); b.textContent = '已复制 ' + copyCount[k] + ' 次'; const dup = document.getElementById('dup-'+b.dataset.i); if(dup) dup.textContent = '已复制'+copyCount[k]+'次'; });
   try { localStorage.setItem('tcopy_copycount', JSON.stringify(copyCount)); } catch(e) {}
   copyText(parts.join('\n\n——————\n\n'));
   showToast(`已复制 ${btns.length} 篇`);
