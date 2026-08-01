@@ -235,7 +235,6 @@ function gen(){
   const remain = Math.max(0, n - pickedCustom.length);
   const pickedBuiltin = weightedSample(builtin, wBuiltin, remain);
   const combos = pickedCustom.concat(pickedBuiltin);
-  const total = combos.length;
 
   last = combos.slice(0,n);
 
@@ -257,7 +256,7 @@ function gen(){
     out.appendChild(art);
   });
 
-  countEl.textContent = `已生成 ${last.length} 篇（候选池 ${combos.length}）`;
+  countEl.textContent = `已生成 ${last.length} 篇（候选池 ${totalAll}）`;
   out.querySelectorAll('.copyone').forEach(b=>{
     b.addEventListener('click',()=>{
       const it = last[+b.dataset.i];
