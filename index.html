@@ -131,19 +131,31 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random
 
 function gen(){
   const custom = document.getElementById('custom').value.split('\n').map(s=>s.trim()).filter(Boolean);
-  let topics = TOPICS.slice();
-  if(custom.length) topics = topics.concat(custom.map(h=>({cat:"自定义",hooks:[h],body:genericBody(h)})));
 
-  const combos = [];
-  for(const t of topics)
+  const builtin = [];
+  for(const t of TOPICS)
     for(const h of t.hooks)
       for(const c of CALLINGS)
         for(const w of WRAPS)
-          combos.push({title:w(c,h), body:t.body, cat:t.cat});
+          builtin.push({title:w(c,h), body:t.body, cat:t.cat});
+
+  let customCombos = [];
+  if(custom.length){
+    const customTopics = custom.map(h=>({cat:"自定义",hooks:[h],body:genericBody(h)}));
+    for(const t of customTopics)
+      for(const h of t.hooks)
+        for(const c of CALLINGS)
+          for(const w of WRAPS)
+            customCombos.push({title:w(c,h), body:t.body, cat:t.cat});
+  }
+
+  shuffle(customCombos);
+  shuffle(builtin);
+  const combos = customCombos.concat(builtin);
+  const total = combos.length;
 
   let n = parseInt(document.getElementById('num').value,10) || 3;
-  n = Math.min(Math.max(n,1), Math.min(combos.length,60));
-  shuffle(combos);
+  n = Math.min(Math.max(n,1), Math.min(total,60));
   last = combos.slice(0,n);
 
   const titleOnly = document.getElementById('titleOnly').checked;
