@@ -192,13 +192,12 @@ const countEl = document.getElementById('count');
 const toast = document.getElementById('toast');
 let last = [];
 let copyCount = {};
+try { copyCount = JSON.parse(localStorage.getItem('tcopy_copycount')) || {}; } catch(e) { copyCount = {}; }
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function renderBody(str){
   return '<div class="body">' + str.split('\n\n').map(p=>`<p>${esc(p)}</p>`).join('') + '</div>';
 }
-function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-
 function weightedSample(arr, weights, n){
   if(!arr.length || n<=0) return [];
   const scored = arr.map((item,i)=>({item, s: Math.random()*weights[i]}));
@@ -265,6 +264,7 @@ function gen(){
       const it = last[+b.dataset.i];
       const k = it.title + "|||" + it.body;
       copyCount[k] = (copyCount[k] || 0) + 1;
+      try { localStorage.setItem('tcopy_copycount', JSON.stringify(copyCount)); } catch(e) {}
       copyText(it.title + '\n\n' + it.body);
       showToast('已复制第 '+(+b.dataset.i+1)+' 篇（累计'+copyCount[k]+'次）');
       b.disabled = true; b.classList.add('copied');
@@ -319,6 +319,7 @@ document.getElementById('copyAll').addEventListener('click', ()=>{
   if(!btns.length){showToast('已全部复制');return;}
   const parts = [];
   btns.forEach(b=>{ const it = last[+b.dataset.i]; const k = it.title + "|||" + it.body; copyCount[k] = (copyCount[k]||0)+1; parts.push(it.title + '\n\n' + it.body); b.disabled = true; b.classList.add('copied'); });
+  try { localStorage.setItem('tcopy_copycount', JSON.stringify(copyCount)); } catch(e) {}
   copyText(parts.join('\n\n——————\n\n'));
   showToast(`已复制 ${btns.length} 篇`);
 });
