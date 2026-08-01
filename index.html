@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>标题+文案批量生成器 · 情感/生活号</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --text:#1f2329; --sub:#6b7280;
+    --line:#e5e7eb; --accent:#2f6fed; --ok:#1a9c5b;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.8;padding:16px 14px 40px;}
+  .wrap{max-width:820px;margin:0 auto;}
+  h1{font-size:20px;margin:0 0 4px;}
+  .tip{color:var(--sub);font-size:13px;margin:0 0 14px;}
+  .bar{position:sticky;top:0;background:rgba(245,246,248,.92);
+    backdrop-filter:blur(6px);padding:10px 0;display:flex;gap:10px;
+    align-items:center;margin-bottom:8px;z-index:5;}
+  .count{color:var(--sub);font-size:13px;flex:1;}
+  .cardbox{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;margin:12px 0;}
+  .cardbox h2{font-size:14px;margin:0 0 10px;color:var(--accent);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  input[type=number]{width:80px;padding:7px 9px;border:1px solid var(--line);
+    border-radius:8px;font-size:14px;}
+  textarea{width:100%;min-height:64px;border:1px solid var(--line);border-radius:8px;
+    padding:9px;font-size:13px;font-family:inherit;resize:vertical;margin-top:8px;}
+  label.s{font-size:13px;color:var(--sub);}
+  input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;}
+  button{background:var(--accent);color:#fff;border:none;border-radius:8px;
+    padding:9px 16px;font-size:14px;cursor:pointer;}
+  button.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent);}
+  .art{background:#fff;border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px;margin:14px 0;}
+  .ttl{font-size:17px;font-weight:700;line-height:1.5;margin:0 0 4px;}
+  .meta{font-size:12px;color:var(--sub);margin-bottom:10px;}
+  .pill{display:inline-block;background:#eef3ff;color:var(--accent);border-radius:6px;
+    padding:1px 8px;margin-right:6px;}
+  .body p{margin:9px 0;font-size:14px;text-align:justify;}
+  .btrow{display:flex;gap:8px;margin-top:12px;}
+  .copyone,.aiBtn{font-size:12px;padding:6px 12px;}
+  .copyone.copied{background:#f0f0f0;color:#bbb;border-color:#e5e7eb;cursor:default;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:#1f2329;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;
+    opacity:0;transition:.25s;pointer-events:none;}
+  .toast.show{opacity:1;}
+  .hint{font-size:12px;color:var(--sub);margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>标题 + 文案批量生成器</h1>
+  <p class="tip">标题 = 称呼×句式×选题钩子；每篇标题自动带上所属选题的成稿正文（排版好、无编号、可直接粘贴公众号）。自定义选题用通用正文模板。</p>
+
+  <div class="bar">
+    <span class="count" id="count">已生成 0 篇</span>
+    <label class="s"><input type="checkbox" id="titleOnly"> 只出标题</label>
+    <button class="ghost" id="copyAll">复制全部</button>
+    <button id="genBtn">生成</button>
+  </div>
+
+  <div class="cardbox">
+    <h2>设置</h2>
+    <div class="row">
+      <label class="s">篇数</label>
+      <input type="number" id="num" value="3" min="1" max="60">
+      <label class="s">（上限 60，正文较长避免卡顿）</label>
+    </div>
+    <label class="s">自定义选题钩子（每行一条，留空则用内置 8 类；自定义项用通用正文模板）：</label>
+    <textarea id="custom" placeholder="例：&#10;一个人在出租屋的第365天&#10;和前任彻底断开联系的那个晚上&#10;35岁裸辞后第一次睡到自然醒"></textarea>
+    <div class="hint">提示：内置 8 类（婚姻日常/母职自我/情绪压抑/独处/亲情/中年压力/友情/生活小确幸）自带完整成稿（每篇 300+ 字、无编号）；自定义项会套通用模板，建议点对应卡片的「AI 扩写提示」复制 prompt 去 AI 精修。</div>
+  </div>
+
+  <div id="out"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const CALLINGS = ["亲爱的","宝子","宝贝","姐妹","姑娘","老朋友"];
+const WRAPS = [
+  (c,h)=>`${c}，${h}`,
+  (c,h)=>`${c}，${h}，你呢？`,
+  (c,h)=>`${c}，关于${h}，想说点心里话`,
+  (c,h)=>`${c}，${h} 这件事，我憋了很久`,
+];
+
+// 内置选题：hook + 成稿正文（无编号、300+ 字、场景化叙事）
+const TOPICS = [
+  { cat:"婚姻日常", hooks:["结婚第5年，我们不再说爱你","不爱了？不，是爱换了样子"],
+    body:`今晚收拾碗筷的时候，他忽然从背后递过来一张纸巾，什么也没说。我愣了一下才发现自己眼泪快掉下来了——不是因为委屈，是那一刻太安静，也太踏实。\n\n我们结婚第五年，好像早就不在嘴上挂"我爱你"了。刚在一起那会儿，连点个外卖都要附一句"么么"；现在呢，微信里最多的对话是"买点葱""接孩子"。可偏偏是这种说不出口的日子，藏着最笨拙的温柔。\n\n前天我感冒，半夜咳醒，发现床头多了杯温水，还有他半边被子被掀开的样子——他大概起来过，又怕吵我，轻手轻脚去倒了水。早上我问他，他一脸茫然："有吗？我忘了。"他不是忘了，他是根本不觉得自己做了什么了不起的事。\n\n你是不是也这样？最动人的情话，不知从哪天起，变成了"饭在锅里，趁热吃"，变成了出门前那句"带伞"，变成了吵架后默默把你的拖鞋摆正。我们不常说了，但每一次递纸巾、每一次半梦半醒间的关照，都是没说出口的"我在"。\n\n爱没少，只是从嘴边，挪到了手边。年轻人用嘴说爱，过日子的人用手。今晚回家，别急着说的话，先看看他有没有悄悄为你做了什么。`},
+
+  { cat:"母职自我", hooks:["当了妈以后，我悄悄弄丢了自己","我是妈妈，我也还是我"],
+    body:`昨天去幼儿园接女儿，老师随口问她："妈妈最喜欢什么颜色呀？"小丫头歪着脑袋想了半天，冒出一句"不知道"。我站在门口，鼻子一下子就酸了。不是怪孩子，是突然惊觉，我好像很久很久，没为自己喜欢过什么了。\n\n当妈之前，我是那种会为了一支口红试三遍、周末睡到自然醒、说走就走约朋友吃火锅的人。当了妈之后，我的手机相册全是她的笑脸，我的日程表密密麻麻写满"她的"——她的疫苗、她的兴趣班、她爱吃的辅食，唯独没有一行写着"我"。\n\n前阵子我偷偷给自己买了束花，插在床头。老公看见，随口来了句"又乱花钱"。我没反驳，只是把花往里挪了挪。可那一个星期，我每次躺下看见那点艳红，都觉得：哦，我还是个会被美打动、值得被自己款待的人。\n\n我们总被教育"为母则刚"，好像当了妈妈，就不该再惦记自己。可我想说，爱孩子，从来不等于弄丢自己。哪怕每天只留十分钟，做一件纯粹为了舒服的小事——泡杯茶、听半首歌、发会儿呆。那十分钟，是你从"谁的妈妈"变回"你自己"的路。\n\n你当妈、或者照顾一家人之后，最想念的那个"自己"，是什么样子的？在评论区，跟我说说吧。`},
+
+  { cat:"情绪压抑", hooks:["你把委屈咽成了那句我没事","我没事，是最常说的谎"],
+    body:`昨晚挂掉我妈电话，我说了句"挺好的，你别担心"，语气轻松得像真没事。可放下手机，我对着天花板发了好久的呆。"我没事"这三个字，大概是我这一年来，说过最多的谎。\n\n同事把本该他的活甩过来，我笑着接了；朋友临时爽约，我说"没关系"；连自己累到发烧，给家里发的也是"一切都好，别挂念"。我们这代人好像都练就了一种本事——把委屈咽下去，怕麻烦别人，也怕显得矫情、显得扛不住。\n\n可你发现没有，"我没事"说多了，真的就没人再来问你了。不是身边人冷漠，是你亲手把那扇门焊死了。别人伸过手来，你次次都挡回去，久而久之，他们也就默认你真的没事。\n\n前些天我胃疼得厉害，一个朋友发来"你还好吗"。我下意识又要打"挺好的"，手指停在屏幕上，忽然改成了"其实今天有点难受"。她立马打来电话，陪我聊了半小时。挂掉的时候我才发现，原来承认脆弱，天也不会塌。\n\n委屈不是软弱，它是身体在提醒你：你该被照顾了。允许自己偶尔不那么坚强，是成年人最被低估的温柔。你上一次说出"我其实不太好"，是什么时候？后来，怎么样了？`},
+
+  { cat:"独处", hooks:["一个人住的第1000天，我和孤独和解了","一个人住，挺好的"],
+    body:`今天，是我一个人住的第1000天。傍晚煮了碗面，手一抖多下了个人份，才猛然想起，不用再等谁推门回来吃饭了。我愣了两秒，然后把自己那份，安安静静吃完了。\n\n刚独居那阵子，最怕周末的晚上。屋里静得能听见冰箱嗡嗡响，我一度把电视开着当背景音，假装屋里还有人声。那时候我以为，安静等于孤单，孤单等于可怜。\n\n后来慢慢不是了。我开始学着跟自己相处：周末去菜场，挑一棵带着水汽的青菜；傍晚散步，跟楼下流浪猫打个招呼；睡前读十页书，不为什么，就为那一小段只属于我的安静。一个人，也能把日子过得有滋有味，甚至比从前更清楚自己想要什么。\n\n第1000天这晚，我忽然懂了——孤独不是没人陪，是还没学会陪自己。当你能在独处里待得住、待得安稳，那种安静就不再刺人，反而成了生活还给你的清静。\n\n如果你也是一个人在外头，不妨问问自己：最享受、也最难的那个瞬间，是在什么时候？其实一个人住，真的挺好的。`},
+
+  { cat:"亲情", hooks:["和父母和解，是从理解他们的害怕开始","他们不是不懂，是害怕"],
+    body:`去年我爸第一次用智能手机跟我视频，举着手机晃了半天，憋出一句"你吃饭了没"。画面晃得我头晕，我当时还嫌他笨，嘟囔了一句"稳住啊爸"。现在想来，他晃的哪里是手机，是他不知道怎么靠近我的那点慌张。\n\n我们总怪父母不懂我们：催婚、干涉、落伍、把"为你好"挂嘴边。可有没有那么一刻你想过，他们的"为你好"背后，大多是害怕——怕你受了伤没人管，怕自己老了帮不上，怕被这个跑得太快的世界远远落下。\n\n我妈前阵子偷偷学发朋友圈，发完又秒删，后来小心翼翼问我："我发这个，会不会显得我闲，给你丢人？"那一刻我鼻酸。她哪是想刷什么存在感，她只是想离我的生活，近那么一点点。\n\n和解从来不是认输，是看见。看见他们也是第一次当父母，也在笨拙地、笨手笨脚地学习怎么爱我。下次他们又唠叨，试着别急着顶回去，轻轻回一句"我知道你担心我"——你会发现，这句话比争赢一百次，都管用。\n\n你和父母之间，有没有哪句话、哪个瞬间，让你忽然就理解了他们？`},
+
+  { cat:"中年压力", hooks:["38岁这年，我学会了在车里多坐十分钟","成年人的喘息，只有十分钟"],
+    body:`最近下班，我总在地下车库多坐十分钟，才上楼。不是不想回家，是那十分钟，是我一整天里，唯一完完全全属于"我"的时间。\n\n38岁像一道莫名其妙的坎。上有越来越老的父母，下有正费钱的孩子，中间是还不清的房贷，和熬不完的班。白天在公司，我是能扛事的；回家，我是能顶梁的。唯独到了镜子前，我常常想不起来，自己到底喜欢什么。\n\n前天我坐在车里，随手放了首老歌，前奏一响，眼泪毫无预兆地砸下来。不是惨，是久违地，感觉自己还活着、还会被一首歌轻轻打动。那十分钟里，没有待回的消息，没有要负的责任，只有我和这首歌。\n\n后来我跟自己立了个规矩：再忙，也留十分钟。不回微信，不想明天，就安安静静坐着。这十分钟很短，短到不够做一件正事；可它又很长，长到够我把那个走丢的"我"，一点点找回来，再推门进那个需要我的家。\n\n你呢，有没有这样一个谁也不是、只做自己的间隙？它在哪儿，又在什么时候？`},
+
+  { cat:"友情", hooks:["那个陪你熬过黑夜的朋友，还在联系吗","改天聚，聚成了永远"],
+    body:`前天半夜失眠，翻手机翻到三年前的一条微信。是阿琳发的："睡不着？我也在。"后面跟着一个歪歪扭扭的晚安表情包。我盯着那行字看了好久——我们，已经大半年没好好聊过了。\n\n成年人的友情，大多不是吵散的，是慢慢死在"改天聚"这三个字里。不是不在乎，是生活太满，满到把最重要的人，挤到了"有空再说"的清单最末尾。\n\n可你还记得吗？是谁在你分手那晚，二话不说跑来陪你哭到天亮；是谁在你急用钱时，转账比安慰来得还快；是谁听完了你所有碎碎念，从没嫌你烦。那些人，不该只活在我们的回忆和朋友圈点赞里。\n\n昨天我给阿琳发了条消息："最近好吗？忽然有点想你。"她几乎秒回："我也。"原来她一直在等，等我先开口。\n\n那个曾陪你熬过黑夜的人，你还联系吗？如果还在，今天就去说一句"我想你"吧。有些关系，不费劲去够，就真的凉了。`},
+
+  { cat:"生活小确幸", hooks:["今晚的月亮，值得你抬头看一眼","生活免费送你的，最贵的东西"],
+    body:`写这篇，不是为了跟你讲什么大道理。只是刚才下楼扔垃圾，一抬头，看见月亮特别圆，特别亮，亮得我有点想拉住路人一起看。\n\n我们活得太低头了。低头回消息，低头赶地铁，低头算这个月又花超了多少；一天下来，脖子是僵的，心也是。那些真正轻的、好的东西，总在我们眼皮底下滑过去，连个影子都没留住。\n\n可月亮一直在啊。它不催你交报表，不评价你过得怎么样，也不向你要一个点赞。它就安安静静挂在那儿，隔着几十万公里，提醒你一件事：世界很大，你那点烦心事，放在里头，只是很小很小的一粒。\n\n所以今晚，不管你多累，去窗边站一分钟吧。别带手机，就看看天，深深吸一口气。那是生活免费送给你的、最便宜也最贵的东西——片刻的、只属于你的安静。\n\n今晚你抬头看月亮了吗？或者说，今天有什么很小很小的事，让你觉得"哎，也还行"？留一句给我，我替你记着。`},
+];
+
+function genericBody(hook){
+  return `今天想跟你聊聊「${hook}」这件事。\n\n关于「${hook}」，太多人选择沉默，或者假装无所谓。我们习惯把话题轻轻掠过，好像不提，它就不曾发生。\n\n你是不是也曾在某个瞬间，被它轻轻硌了一下？那种说不清的堵，不像大事，却总在深夜冒出来。\n\n其实没关系，慢慢来。看清它，就已经往前走了一步。你不需要立刻想通，只要愿意正视，就已经比昨天勇敢。\n\n你呢？关于「${hook}」，你有什么想说的？评论区告诉我，我替你记着。`;
+}
+
+const out = document.getElementById('out');
+const countEl = document.getElementById('count');
+const toast = document.getElementById('toast');
+let last = [];
+
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function renderBody(str){
+  return '<div class="body">' + str.split('\n\n').map(p=>`<p>${esc(p)}</p>`).join('') + '</div>';
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+function gen(){
+  const custom = document.getElementById('custom').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  let topics = TOPICS.slice();
+  if(custom.length) topics = topics.concat(custom.map(h=>({cat:"自定义",hooks:[h],body:genericBody(h)})));
+
+  const combos = [];
+  for(const t of topics)
+    for(const h of t.hooks)
+      for(const c of CALLINGS)
+        for(const w of WRAPS)
+          combos.push({title:w(c,h), body:t.body, cat:t.cat});
+
+  let n = parseInt(document.getElementById('num').value,10) || 3;
+  n = Math.min(Math.max(n,1), Math.min(combos.length,60));
+  shuffle(combos);
+  last = combos.slice(0,n);
+
+  const titleOnly = document.getElementById('titleOnly').checked;
+  out.innerHTML = '';
+  last.forEach((it,i)=>{
+    const art = document.createElement('div');
+    art.className = 'art';
+    let html = `<div class="ttl">${esc(it.title)}</div><div class="meta"><span class="pill">${esc(it.cat)}</span>第 ${i+1} 篇</div>`;
+    if(!titleOnly) html += renderBody(it.body);
+    html += `<div class="btrow">
+      <button class="ghost copyone" data-i="${i}">复制此篇</button>
+      <button class="ghost aiBtn" data-i="${i}">AI 扩写提示</button>
+    </div>`;
+    art.innerHTML = html;
+    out.appendChild(art);
+  });
+
+  countEl.textContent = `已生成 ${last.length} 篇（候选池 ${combos.length}）`;
+  out.querySelectorAll('.copyone').forEach(b=>{
+    b.addEventListener('click',()=>{
+      if(b.disabled) return;
+      const it = last[+b.dataset.i];
+      copyText(it.title + '\n\n' + it.body);
+      showToast('已复制第 '+(+b.dataset.i+1)+' 篇');
+      b.disabled = true; b.classList.add('copied');
+    });
+  });
+  out.querySelectorAll('.aiBtn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const it = last[+b.dataset.i];
+      copyText(buildPrompt(it));
+      showToast('已复制第 '+(+b.dataset.i+1)+' 篇 · AI 扩写 prompt');
+    });
+  });
+}
+
+function buildPrompt(it){
+  const isCustom = it.cat === "自定义";
+  const task = isCustom
+    ? "请将下面这份通用毛坯，扩写成一篇完整、出彩、可直接发布的文案。"
+    : "下面是一篇已有稿件，请换一个切入点重写一版同题文案，保持同等质量。";
+  const refLabel = isCustom ? "【现有毛坯（通用模板，待扩写）】" : "【现有参考稿（请换切入点重写）】";
+  return `你是公众号情感/生活号写作助手。${task}
+
+【标题】${it.title}
+【选题方向】${it.cat}
+${refLabel}
+${it.body}
+
+要求：
+1. 保留原标题（或微调得更自然）。
+2. 改写为流畅的场景化叙事，不要用 123 编号、不要列点。
+3. 不少于 300 字，加入具体画面细节与真实情绪，避免空泛说教。
+4. 结尾用真诚的提问引导评论互动（不引战、不骗赞）。
+5. 语气亲切克制，符合"亲爱的/宝子"开头的情感号风格。
+6. 不虚构资质、不承诺无法兑现的效果、不引导加微信。
+
+请直接输出完整文案（标题 + 正文），不要多余解释。`;
+}
+
+function copyText(t){
+  navigator.clipboard.writeText(t).then(()=>{},()=>fallbackCopy(t));
+}
+function fallbackCopy(t){
+  const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);
+  ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);
+}
+function showToast(m){toast.textContent=m;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),1800);}
+
+document.getElementById('genBtn').addEventListener('click', gen);
+document.getElementById('copyAll').addEventListener('click', ()=>{
+  if(!last.length){showToast('先生成再复制');return;}
+  const btns = out.querySelectorAll('.copyone:not([disabled])');
+  if(!btns.length){showToast('已全部复制');return;}
+  const parts = [];
+  btns.forEach(b=>{ const it = last[+b.dataset.i]; parts.push(it.title + '\n\n' + it.body); b.disabled = true; b.classList.add('copied'); });
+  copyText(parts.join('\n\n——————\n\n'));
+  showToast(`已复制 ${btns.length} 篇`);
+});
+document.getElementById('titleOnly').addEventListener('change', gen);
+
+gen();
+</script>
+</body>
+</html>
